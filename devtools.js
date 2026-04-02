@@ -3,6 +3,7 @@
 // Get the inspected tab ID
 const tabId = chrome.devtools.inspectedWindow.tabId;
 let lastScreenshotUrl = '';
+let availableTokens = [];
 
 // DOM elements
 const captureBtn = document.getElementById('captureBtn');
@@ -10,9 +11,41 @@ const copyBtn = document.getElementById('copyBtn');
 const openBtn = document.getElementById('openBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const issueIdInput = document.getElementById('issueIdInput');
+const tokenSelect = document.getElementById('tokenSelect');
 const status = document.getElementById('status');
 const resultBox = document.getElementById('resultBox');
 const resultUrl = document.getElementById('resultUrl');
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadAvailableTokens();
+});
+
+// Load available tokens from storage
+function loadAvailableTokens() {
+  chrome.storage.sync.get(['githubTokens'], (result) => {
+    availableTokens = result.githubTokens || [];
+    
+    // Populate dropdown
+    if (tokenSelect) {
+      tokenSelect.innerHTML = '<option value="">-- No token selected --</option>';
+      
+      if (availableTokens.length === 0) {
+        const option = document.createElement('option');
+        option.disabled = true;
+        option.textContent = 'No tokens configured';
+        tokenSelect.appendChild(option);
+      } else {
+        availableTokens.forEach((token, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = `${token.name} (${token.owner}/${token.repo})`;
+          tokenSelect.appendChild(option);
+        });
+      }
+    }
+  });
+}
 
 // Capture button
 captureBtn.addEventListener('click', async () => {
@@ -32,10 +65,12 @@ captureBtn.addEventListener('click', async () => {
           showStatus('✅ Screenshot captured and uploaded!', 'success');
           console.log('Screenshot uploaded:', response.url);
 
-          // Check if issue ID is provided for GitHub integration
+          // Check if issue ID and token are provided for GitHub integration
           const issueId = issueIdInput.value.trim();
-          if (issueId) {
-            await addScreenshotToGithubIssue(issueId, response.url);
+          const selectedTokenIndex = parseInt(tokenSelect.value);
+          
+          if (issueId && selectedTokenIndex >= 0 && availableTokens[selectedTokenIndex]) {
+            await addScreenshotToGithubIssue(issueId, response.url, selectedTokenIndex);
           }
         } else {
           showStatus('❌ ' + (response?.error || 'Failed to capture screenshot'), 'error');
@@ -52,39 +87,23 @@ captureBtn.addEventListener('click', async () => {
 });
 
 // Add screenshot to GitHub issue
-async function addScreenshotToGithubIssue(issueId, screenshotUrl) {
+async function addScreenshotToGithubIssue(issueId, screenshotUrl, tokenIndex) {
   showStatus('Adding screenshot to GitHub issue...', 'info');
   
   try {
-    // Get GitHub settings
-    const settings = await new Promise((resolve) => {
-      chrome.storage.sync.get(['githubToken', 'githubRepoUrl'], resolve);
-    });
-
-    const { githubToken, githubRepoUrl } = settings;
-
-    console.log('DevTools: GitHub settings check...');
-    console.log('DevTools: Token exists:', !!githubToken);
-    console.log('DevTools: Repo URL exists:', !!githubRepoUrl);
-    console.log('DevTools: Issue ID:', issueId);
-
-    if (!githubToken || !githubRepoUrl) {
-      showStatus('❌ GitHub token or repository URL not configured in settings', 'error');
+    const selectedToken = availableTokens[tokenIndex];
+    
+    if (!selectedToken) {
+      showStatus('❌ Selected token not found', 'error');
       return;
     }
 
-    // Parse repository URL
-    const match = githubRepoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(\.git)?$/);
-    if (!match) {
-      console.error('DevTools: URL parsing failed for:', githubRepoUrl);
-      showStatus('❌ Invalid GitHub repository URL format (should be https://github.com/owner/repo)', 'error');
-      return;
-    }
-
-    const owner = match[1];
-    const repo = match[2];
+    const owner = selectedToken.owner;
+    const repo = selectedToken.repo;
+    const token = selectedToken.token;
     const cleanIssueId = issueId.replace(/^#/, '');
 
+    console.log('DevTools: Using token:', selectedToken.name);
     console.log('DevTools: Parsed - Owner:', owner, 'Repo:', repo, 'Issue:', cleanIssueId);
 
     if (!cleanIssueId || isNaN(cleanIssueId)) {
@@ -92,27 +111,32 @@ async function addScreenshotToGithubIssue(issueId, screenshotUrl) {
       return;
     }
 
-    // Call background script to add comment
-    chrome.runtime.sendMessage(
-      {
-        action: 'addGithubComment',
-        owner: owner,
-        repo: repo,
-        issueNumber: cleanIssueId,
-        token: githubToken,
-        screenshotUrl: screenshotUrl
-      },
-      (response) => {
-        if (response && response.success) {
-          showStatus('✅ Screenshot added to GitHub issue #' + cleanIssueId + '!', 'success');
-          issueIdInput.value = '';
-          setTimeout(() => hideStatus(), 3000);
-        } else {
-          showStatus('❌ Failed to add comment: ' + (response?.error || 'Unknown error'), 'error');
-          console.error('DevTools: GitHub comment failed:', response?.error);
+    // Get current page URL
+    chrome.tabs.get(tabId, (tab) => {
+      const pageUrl = tab ? tab.url : 'Unknown';
+      
+      // Call background script to add comment
+      chrome.runtime.sendMessage(
+        {
+          action: 'addGithubComment',
+          owner: owner,
+          repo: repo,
+          issueNumber: cleanIssueId,
+          token: token,
+          screenshotUrl: screenshotUrl,
+          pageUrl: pageUrl
+        },
+        (response) => {
+          if (response && response.success) {
+            showStatus('✅ Screenshot added to GitHub issue #' + cleanIssueId + '!', 'success');
+            setTimeout(() => hideStatus(), 3000);
+          } else {
+            showStatus('❌ Failed to add comment: ' + (response?.error || 'Unknown error'), 'error');
+            console.error('DevTools: GitHub comment failed:', response?.error);
+          }
         }
-      }
-    );
+      );
+    });
   } catch (error) {
     showStatus('❌ Error: ' + error.message, 'error');
     console.error('DevTools: GitHub integration error:', error);
