@@ -36,7 +36,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.repo,
       request.issueNumber,
       request.token,
-      request.screenshotUrl
+      request.screenshotUrl,
+      request.pageUrl
     )
       .then(() => {
         console.log('Background: GitHub comment added successfully');
@@ -156,13 +157,21 @@ async function uploadToCatbox(blob) {
   }
 }
 
-async function addGithubComment(owner, repo, issueNumber, token, screenshotUrl) {
+async function addGithubComment(owner, repo, issueNumber, token, screenshotUrl, pageUrl) {
   try {
     console.log('Background: Adding comment to issue #' + issueNumber + ' in ' + owner + '/' + repo);
     console.log('Background: Token format:', token.substring(0, 10) + '...');
     console.log('Background: Screenshot URL:', screenshotUrl);
+    console.log('Background: Page URL:', pageUrl);
 
-    const commentBody = `<img src="${screenshotUrl}" alt="Screenshot" style="max-width: 100%; height: auto;"/>`;
+    // Format the comment with page URL, description, and image
+    let commentBody = `**Screenshot from:** [${pageUrl}](${pageUrl})\n\n`;
+    
+    if (screenshotUrl) {
+      commentBody += `<img src="${screenshotUrl}" alt="Screenshot" style="max-width: 100%; height: auto;"/>`;
+    } else {
+      commentBody += 'Screenshot captured from the inspected page.';
+    }
 
     const url = `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`;
     console.log('Background: GitHub API URL:', url);
