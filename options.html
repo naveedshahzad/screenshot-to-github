@@ -242,38 +242,56 @@
     </div>
 
     <div class="settings-section">
-      <div class="section-title">GitHub Integration</div>
+      <div class="section-title">🐙 GitHub Tokens</div>
       
-      <div>
-        <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">GitHub Personal Access Token</label>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Token Name</label>
+        <input 
+          type="text" 
+          id="tokenName" 
+          placeholder="e.g., Personal, Work, Organization"
+          autocomplete="off"
+          style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 8px;"
+        >
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Personal Access Token</label>
         <input 
           type="password" 
-          id="githubToken" 
+          id="tokenValue" 
           placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
           autocomplete="off"
-          style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px;"
+          style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 8px;"
         >
         <div class="help-text">
           Create a token at <a href="https://github.com/settings/tokens" target="_blank" style="color: #667eea;">github.com/settings/tokens</a> with <code>repo</code> scope
         </div>
       </div>
 
-      <div style="margin-top: 16px;">
-        <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">GitHub Repository URL</label>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px;">Repository URL</label>
         <input 
           type="text" 
-          id="githubRepoUrl" 
+          id="tokenRepoUrl" 
           placeholder="e.g., https://github.com/username/repository"
           autocomplete="off"
           style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 8px;"
         >
         <div class="help-text">
-          Example: <code>https://github.com/myuser/myrepo</code>
+          Format: <code>https://github.com/owner/repo</code>
         </div>
       </div>
 
-      <button id="saveGithubBtn" style="margin-top: 12px; width: 100%;">Save GitHub Settings</button>
-      <div id="githubMessage" class="message" style="margin-top: 12px;"></div>
+      <button id="addTokenBtn" style="margin-bottom: 16px; width: 100%;">+ Add Token</button>
+      <div id="tokenMessage" class="message" style="margin-bottom: 12px;"></div>
+
+      <div class="settings-section" style="margin: 0; border-top: 1px solid #ddd; padding-top: 16px;">
+        <div style="font-weight: 600; color: #333; margin-bottom: 12px; font-size: 14px;">Configured Tokens</div>
+        <div id="tokensList">
+          <div class="empty-state">No tokens yet. Add one above to get started!</div>
+        </div>
+      </div>
     </div>
 
     <div class="settings-section">

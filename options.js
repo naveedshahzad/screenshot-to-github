@@ -2,22 +2,21 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   loadDomains();
-  loadGithubSettings();
+  loadTokens();
   
-  // Add event listeners
-  const addBtn = document.getElementById('addDomainBtn');
+  // Add event listeners for domains
+  const addDomainBtn = document.getElementById('addDomainBtn');
   const domainInput = document.getElementById('domainInput');
   const domainList = document.getElementById('domainList');
-  const saveGithubBtn = document.getElementById('saveGithubBtn');
   
-  if (addBtn) addBtn.addEventListener('click', addDomain);
+  if (addDomainBtn) addDomainBtn.addEventListener('click', addDomain);
   if (domainInput) domainInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       addDomain();
     }
   });
   
-  // Event delegation for remove buttons
+  // Event delegation for remove buttons (domains)
   if (domainList) {
     domainList.addEventListener('click', (e) => {
       if (e.target.classList.contains('remove-btn')) {
@@ -27,9 +26,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // GitHub settings handler
-  if (saveGithubBtn) {
-    saveGithubBtn.addEventListener('click', saveGithubSettings);
+  // Add event listeners for tokens
+  const addTokenBtn = document.getElementById('addTokenBtn');
+  const tokensList = document.getElementById('tokensList');
+  
+  if (addTokenBtn) addTokenBtn.addEventListener('click', addToken);
+  
+  // Event delegation for remove buttons (tokens)
+  if (tokensList) {
+    tokensList.addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove-token-btn')) {
+        const index = e.target.dataset.index;
+        removeToken(parseInt(index));
+      }
+    });
   }
 });
 
@@ -164,67 +174,140 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-function loadGithubSettings() {
-  chrome.storage.sync.get(['githubToken', 'githubRepoUrl'], (result) => {
-    const token = result.githubToken || '';
-    const repoUrl = result.githubRepoUrl || '';
-    
-    const tokenInput = document.getElementById('githubToken');
-    const repoInput = document.getElementById('githubRepoUrl');
-    
-    if (tokenInput) tokenInput.value = token;
-    if (repoInput) repoInput.value = repoUrl;
+function loadTokens() {
+  chrome.storage.sync.get(['githubTokens'], (result) => {
+    const tokens = result.githubTokens || [];
+    const tokensList = document.getElementById('tokensList');
+
+    if (tokens.length === 0) {
+      tokensList.innerHTML = '<div class="empty-state">No tokens yet. Add one above to get started!</div>';
+      return;
+    }
+
+    tokensList.innerHTML = '';
+    tokens.forEach((token, index) => {
+      const div = document.createElement('div');
+      div.className = 'domain-item';
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'domain-name';
+      nameSpan.innerHTML = `<strong>${escapeHtml(token.name)}</strong><br><span style="font-size: 12px; color: #666;">Repo: ${escapeHtml(token.owner)}/${escapeHtml(token.repo)}</span>`;
+      
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove';
+      removeBtn.className = 'remove-token-btn';
+      removeBtn.dataset.index = index;
+      
+      div.appendChild(nameSpan);
+      div.appendChild(removeBtn);
+      tokensList.appendChild(div);
+    });
   });
 }
 
-function saveGithubSettings() {
-  const token = (document.getElementById('githubToken') || {}).value || '';
-  const repoUrl = (document.getElementById('githubRepoUrl') || {}).value || '';
+function addToken() {
+  const name = (document.getElementById('tokenName') || {}).value || '';
+  const token = (document.getElementById('tokenValue') || {}).value || '';
+  const repoUrl = (document.getElementById('tokenRepoUrl') || {}).value || '';
 
-  if (!token || !repoUrl) {
-    showGithubMessage('Please fill in both GitHub token and repository URL', 'error');
+  if (!name || !token || !repoUrl) {
+    showTokenMessage('Please fill in token name, token value, and repository URL', 'error');
     return;
   }
 
-  // Validate GitHub token format (support both classic and new token formats)
-  // Classic: ghp_*, New: github_pat_*
+  // Validate GitHub token format
   if (!token.startsWith('ghp_') && !token.startsWith('ghs_') && !token.startsWith('ghu_') && !token.startsWith('github_pat_')) {
-    showGithubMessage('⚠️ Token format may be invalid. Tokens should start with ghp_, ghs_, ghu_, or github_pat_. Continue anyway?', 'warning');
+    showTokenMessage('⚠️ Token format may be invalid. Tokens should start with ghp_, ghs_, ghu_, or github_pat_', 'error');
+    return;
   }
 
   // Validate repo URL format
   if (!repoUrl.includes('github.com')) {
-    showGithubMessage('Invalid repository URL. Should be like https://github.com/username/repository', 'error');
+    showTokenMessage('Invalid repository URL. Should be like https://github.com/username/repository', 'error');
     return;
   }
 
   // Parse and validate repo URL
   const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(\.git)?$/);
   if (!repoMatch) {
-    showGithubMessage('Invalid repository URL format. Use: https://github.com/owner/repo or https://github.com/owner/repo.git', 'error');
+    showTokenMessage('Invalid repository URL format. Use: https://github.com/owner/repo', 'error');
     return;
   }
 
   const owner = repoMatch[1];
   const repo = repoMatch[2];
 
-  console.log('Options: Saving GitHub settings for', owner + '/' + repo);
+  chrome.storage.sync.get(['githubTokens'], (result) => {
+    const tokens = result.githubTokens || [];
 
-  chrome.storage.sync.set({ githubToken: token, githubRepoUrl: repoUrl }, () => {
-    showGithubMessage('✅ GitHub settings saved successfully! (Owner: ' + owner + ', Repo: ' + repo + ')', 'success');
-    console.log('Options: GitHub settings saved');
-    setTimeout(() => {
-      const msg = document.getElementById('githubMessage');
-      if (msg) msg.style.display = 'none';
-    }, 4000);
+    // Check for duplicate names
+    if (tokens.some(t => t.name.toLowerCase() === name.toLowerCase())) {
+      showTokenMessage(`Token with name "${name}" already exists`, 'error');
+      return;
+    }
+
+    // Add new token
+    tokens.push({
+      name: name,
+      token: token,
+      owner: owner,
+      repo: repo,
+      repoUrl: repoUrl
+    });
+
+    chrome.storage.sync.set({ githubTokens: tokens }, () => {
+      showTokenMessage(`✅ Token "${name}" added successfully!`, 'success');
+      
+      // Clear inputs
+      document.getElementById('tokenName').value = '';
+      document.getElementById('tokenValue').value = '';
+      document.getElementById('tokenRepoUrl').value = '';
+      
+      loadTokens();
+
+      // Auto-hide success message
+      setTimeout(() => {
+        document.getElementById('tokenMessage').style.display = 'none';
+      }, 3000);
+    });
   });
 }
 
-function showGithubMessage(text, type) {
-  const messageEl = document.getElementById('githubMessage');
+function removeToken(index) {
+  chrome.storage.sync.get(['githubTokens'], (result) => {
+    const tokens = result.githubTokens || [];
+    const removedToken = tokens[index];
+    
+    tokens.splice(index, 1);
+    chrome.storage.sync.set({ githubTokens: tokens }, () => {
+      showTokenMessage(`Removed token "${removedToken.name}"`, 'info');
+      loadTokens();
+
+      // Auto-hide message
+      setTimeout(() => {
+        document.getElementById('tokenMessage').style.display = 'none';
+      }, 2000);
+    });
+  });
+}
+
+function showTokenMessage(text, type) {
+  const messageEl = document.getElementById('tokenMessage');
   if (!messageEl) return;
   
   messageEl.textContent = text;
   messageEl.className = `message ${type}`;
   messageEl.style.display = 'block';
+}
+
+function loadGithubSettings() {
+  // Deprecated - for compatibility
+}
+
+function saveGithubSettings() {
+  // Deprecated - for compatibility
+}
+
+function showGithubMessage(text, type) {
+  // Deprecated - for compatibility
 }
